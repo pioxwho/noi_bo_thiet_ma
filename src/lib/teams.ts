@@ -1,4 +1,4 @@
-import { POSITIONS, type Lineup } from "@/lib/formation";
+import { POSITIONS, allPlayers, type Player, type PositionKey, type Roster, type Team } from "@/lib/formation";
 
 export type Kit = {
   body: string; // màu thân áo
@@ -26,9 +26,22 @@ export const SHIRT_PATH =
 export const SHIRT_BODY_PATH = "M20 2 Q30 10 40 2 L47 8 L47 54 L13 54 L13 8 Z";
 export const SHIRT_COLLAR_PATH = "M20 2 Q30 10 40 2";
 
-export function resultText(result: [Lineup, Lineup]) {
+// Đổi id trong kết quả chia thành thông tin cầu thủ
+export function resolveTeams(roster: Roster, teams: [Team, Team]) {
+  const byId = new Map(allPlayers(roster).map((p) => [p.id, p]));
+  const get = (id: string): Player => byId.get(id) ?? { id, name: "?" };
+  return teams.map((t) => ({
+    lineup: Object.fromEntries(POSITIONS.map((p) => [p.key, get(t.lineup[p.key])])) as Record<PositionKey, Player>,
+    subs: t.subs.map(get),
+  }));
+}
+
+export type ResolvedTeam = ReturnType<typeof resolveTeams>[number];
+
+export function resultText(teams: ResolvedTeam[]) {
   const team = (i: number) =>
     `${TEAMS[i].emoji} ${TEAMS[i].name.toUpperCase()}\n` +
-    POSITIONS.map((p) => `${p.key}: ${result[i][p.key]}`).join("\n");
+    POSITIONS.map((p) => `${p.key}: ${teams[i].lineup[p.key].name}`).join("\n") +
+    (teams[i].subs.length ? `\nDự bị: ${teams[i].subs.map((s) => s.name).join(", ")}` : "");
   return `⚽ FC THIẾT MÃ\n\n${team(0)}\n\n${team(1)}`;
 }

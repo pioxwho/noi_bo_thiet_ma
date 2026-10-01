@@ -2,14 +2,25 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
-import { POSITIONS, type Lineup } from "@/lib/formation";
-import { SHIRT_BODY_PATH, SHIRT_COLLAR_PATH, SHIRT_PATH, TEAMS, type Kit } from "@/lib/teams";
+import { POSITIONS, type Player } from "@/lib/formation";
+import {
+  SHIRT_BODY_PATH,
+  SHIRT_COLLAR_PATH,
+  SHIRT_PATH,
+  TEAMS,
+  type Kit,
+  type ResolvedTeam,
+} from "@/lib/teams";
 
 const WIDTH = 1200;
-const HEIGHT = 990;
+const BASE_HEIGHT = 990;
 const PITCH_W = 520;
 const PITCH_H = 780;
 const LINE = "rgba(255,255,255,.75)";
+// Khu dự bị: 3 người mỗi hàng
+const SUBS_PER_ROW = 3;
+const SUB_ROW_H = 96;
+const SUBS_HEADER_H = 80;
 
 const fonts = Promise.all([
   readFile(join(process.cwd(), "assets/BeVietnamPro-Bold.ttf")),
@@ -44,7 +55,94 @@ function Shirt({ kit, label }: { kit: Kit; label: string }) {
   );
 }
 
-function Pitch({ name, kit, lineup }: { name: string; kit: Kit; lineup: Lineup }) {
+// Ảnh cầu thủ kèm nhãn vị trí, không có ảnh thì vẽ áo đấu
+function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; label: string; size: number }) {
+  if (!player.photo) return <Shirt kit={kit} label={label} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- ảnh render bằng Satori, không phải trong trình duyệt */}
+      <img
+        src={player.photo}
+        alt=""
+        width={size}
+        height={size}
+        style={{ borderRadius: size / 2, border: `4px solid ${kit.body}`, objectFit: "cover" }}
+      />
+      {label && (
+        <div
+          style={{
+            display: "flex",
+            marginTop: -12,
+            padding: "0 6px",
+            borderRadius: 4,
+            fontSize: 13,
+            fontWeight: 800,
+            background: kit.body,
+            color: kit.text,
+            border: `2px solid ${kit.trim}`,
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const nameStyle = {
+  display: "flex",
+  maxWidth: 170,
+  padding: "3px 10px",
+  borderRadius: 4,
+  background: "#6b1230",
+  color: "white",
+  fontSize: 17,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+} as const;
+
+function Bench({ subs, kit }: { subs: Player[]; kit: Kit }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: PITCH_W,
+        marginTop: 16,
+        padding: "12px 16px",
+        borderRadius: 16,
+        background: "rgba(255,255,255,.06)",
+        border: "1px solid rgba(255,255,255,.12)",
+      }}
+    >
+      <div style={{ display: "flex", fontSize: 20, fontWeight: 800, color: "#facc15", marginBottom: 8 }}>
+        DỰ BỊ ({subs.length})
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap" }}>
+        {subs.map((s) => (
+          <div
+            key={s.id}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              width: Math.floor((PITCH_W - 34) / SUBS_PER_ROW),
+              height: SUB_ROW_H,
+            }}
+          >
+            <PlayerBadge player={s} kit={kit} label="" size={56} />
+            <div style={{ ...nameStyle, marginTop: 2, fontSize: 15, maxWidth: 150 }}>{s.name}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamColumn({ name, kit, team, showBench }: { name: string; kit: Kit; team: ResolvedTeam; showBench: boolean }) {
   const stripes = Array.from({ length: 10 }, (_, i) => i);
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -76,48 +174,38 @@ function Pitch({ name, kit, lineup }: { name: string; kit: Kit; lineup: Lineup }
           <rect x="38" y="139" width="24" height="8" fill="none" stroke={LINE} strokeWidth="0.6" />
           <path d="M40 125 A10 10 0 0 1 60 125" fill="none" stroke={LINE} strokeWidth="0.6" />
         </svg>
-        {POSITIONS.map((p) => (
-          <div
-            key={p.key}
-            style={{
-              position: "absolute",
-              left: (p.x / 100) * PITCH_W - 90,
-              top: (p.y / 100) * PITCH_H - 44,
-              width: 180,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <Shirt kit={kit} label={p.key} />
+        {POSITIONS.map((p) => {
+          const player = team.lineup[p.key];
+          return (
             <div
+              key={p.key}
               style={{
+                position: "absolute",
+                left: (p.x / 100) * PITCH_W - 90,
+                top: (p.y / 100) * PITCH_H - (player.photo ? 56 : 44),
+                width: 180,
                 display: "flex",
-                marginTop: -4,
-                maxWidth: 180,
-                padding: "3px 10px",
-                borderRadius: 4,
-                background: "#6b1230",
-                color: "white",
-                fontSize: 17,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                flexDirection: "column",
+                alignItems: "center",
               }}
             >
-              {lineup[p.key]}
+              <PlayerBadge player={player} kit={kit} label={p.key} size={76} />
+              <div style={{ ...nameStyle, marginTop: player.photo ? 2 : -4 }}>{player.name}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {showBench && <Bench subs={team.subs} kit={kit} />}
     </div>
   );
 }
 
-export async function renderLineupPng(result: [Lineup, Lineup], subtitle: string) {
+export async function renderLineupPng(teams: ResolvedTeam[], subtitle: string) {
   const [bold, extraBold] = await fonts;
+  const maxSubs = Math.max(...teams.map((t) => t.subs.length));
+  const benchRows = Math.ceil(maxSubs / SUBS_PER_ROW);
+  const height = BASE_HEIGHT + (maxSubs ? SUBS_HEADER_H + benchRows * SUB_ROW_H : 0);
+
   const image = new ImageResponse(
     (
       <div
@@ -133,20 +221,20 @@ export async function renderLineupPng(result: [Lineup, Lineup], subtitle: string
           paddingTop: 28,
         }}
       >
-        <div style={{ display: "flex", fontSize: 48, fontWeight: 800, color: "#facc15" }}>FC THIẾT MÃ</div>
-        <div style={{ display: "flex", fontSize: 20, color: "rgba(255,255,255,.6)", marginBottom: 18 }}>
+        <div style={{ display: "flex", flexShrink: 0, fontSize: 48, fontWeight: 800, color: "#facc15" }}>FC THIẾT MÃ</div>
+        <div style={{ display: "flex", flexShrink: 0, fontSize: 20, color: "rgba(255,255,255,.6)", marginBottom: 18 }}>
           {subtitle}
         </div>
-        <div style={{ display: "flex", width: "100%", justifyContent: "space-around" }}>
+        <div style={{ display: "flex", width: "100%", justifyContent: "space-around", alignItems: "flex-start" }}>
           {TEAMS.map((t, i) => (
-            <Pitch key={t.name} name={t.name} kit={t.kit} lineup={result[i]} />
+            <TeamColumn key={t.name} name={t.name} kit={t.kit} team={teams[i]} showBench={maxSubs > 0} />
           ))}
         </div>
       </div>
     ),
     {
       width: WIDTH,
-      height: HEIGHT,
+      height,
       fonts: [
         { name: "Be Vietnam Pro", data: bold, weight: 700, style: "normal" },
         { name: "Be Vietnam Pro", data: extraBold, weight: 800, style: "normal" },

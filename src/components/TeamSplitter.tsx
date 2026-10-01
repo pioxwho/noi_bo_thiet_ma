@@ -1,16 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Pitch from "@/components/Pitch";
-import { POSITIONS, emptyRoster, type Lineup, type PositionKey, type Roster } from "@/lib/formation";
-import { TEAMS, resultText } from "@/lib/teams";
+import {
+  MAX_NAME,
+  MAX_SUBS,
+  POSITIONS,
+  emptyRoster,
+  newPlayer,
+  type Player,
+  type Roster,
+  type Team,
+} from "@/lib/formation";
+import { TEAMS, resolveTeams, resultText } from "@/lib/teams";
 
-const STORAGE_KEY = "noibothietma:v1";
+const STORAGE_KEY = "noibothietma:v2";
 // Sau khi chia đội, muốn chia lại trong khoảng này phải nhập OTP
 const LOCK_MS = 6 * 60 * 60 * 1000;
 const OTP_COOLDOWN_S = 60;
+const AVATAR_PX = 192;
 
-type Saved = { roster: Roster; result: [Lineup, Lineup] | null; lockUntil?: number };
+type Saved = { roster: Roster; teams: [Team, Team] | null; lockUntil?: number };
 
 function load(): Saved | null {
   try {
@@ -25,7 +36,7 @@ function save(data: Saved) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    // Trình duyệt chặn lưu trữ: bỏ qua
+    // Trình duyệt chặn lưu trữ hoặc hết dung lượng: bỏ qua
   }
 }
 
@@ -40,11 +51,95 @@ async function postJson<T>(url: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
+// Cắt ảnh vuông ở giữa và thu nhỏ để lưu và gửi đi nhẹ
+async function toAvatar(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = AVATAR_PX;
+  canvas
+    .getContext("2d")!
+    .drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, AVATAR_PX, AVATAR_PX);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
+function PlayerInput({
+  player,
+  placeholder,
+  label,
+  onChange,
+  onError,
+  onRemove,
+}: {
+  player: Player;
+  placeholder: string;
+  label: string;
+  onChange: (patch: Partial<Player>) => void;
+  onError: (msg: string) => void;
+  onRemove?: () => void;
+}) {
+  const pickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      onChange({ photo: await toAvatar(file) });
+    } catch {
+      onError("Không đọc được ảnh, hãy chọn ảnh JPG hoặc PNG khác.");
+    }
+  };
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <div className="relative shrink-0">
+        <label
+          className="flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white/15 text-lg ring-1 ring-white/25 hover:bg-white/25"
+          title="Chọn ảnh"
+        >
+          {player.photo ? (
+            <Image src={player.photo} alt={player.name} width={44} height={44} unoptimized className="h-full w-full object-cover" />
+          ) : (
+            <span aria-hidden>📷</span>
+          )}
+          <input type="file" accept="image/*" onChange={pickPhoto} className="sr-only" aria-label={`Ảnh ${label}`} />
+        </label>
+        {player.photo && (
+          <button
+            onClick={() => onChange({ photo: undefined })}
+            className="absolute -right-1 -top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-zinc-900 text-[10px] text-white ring-1 ring-white/40"
+            aria-label={`Xóa ảnh ${label}`}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      <input
+        value={player.name}
+        onChange={(e) => onChange({ name: e.target.value })}
+        placeholder={placeholder}
+        aria-label={label}
+        maxLength={MAX_NAME}
+        className="min-w-0 flex-1 rounded-lg bg-white/90 px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-yellow-400"
+      />
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="flex h-11 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+          aria-label={`Xóa ${label}`}
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TeamSplitter() {
   // Khôi phục danh sách đã nhập lần trước (component chỉ render ở trình duyệt)
   const [saved] = useState(load);
-  const [roster, setRoster] = useState<Roster>(() => ({ ...emptyRoster(), ...saved?.roster }));
-  const [result, setResult] = useState<[Lineup, Lineup] | null>(saved?.result ?? null);
+  const [roster, setRoster] = useState<Roster>(() => saved?.roster ?? emptyRoster());
+  const [teams, setTeams] = useState<[Team, Team] | null>(saved?.teams ?? null);
   const [lockUntil, setLockUntil] = useState(saved?.lockUntil ?? 0);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -58,8 +153,8 @@ export default function TeamSplitter() {
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
-    save({ roster, result, lockUntil });
-  }, [roster, result, lockUntil]);
+    save({ roster, teams, lockUntil });
+  }, [roster, teams, lockUntil]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -67,40 +162,50 @@ export default function TeamSplitter() {
     return () => clearTimeout(t);
   }, [cooldown]);
 
-  const setName = (key: PositionKey, idx: 0 | 1, value: string) => {
-    setRoster((r) => {
-      const pair: [string, string] = [...r[key]];
-      pair[idx] = value;
-      return { ...r, [key]: pair };
-    });
+  const updatePlayer = (id: string, patch: Partial<Player>) => {
+    const apply = (p: Player) => (p.id === id ? { ...p, ...patch } : p);
+    setRoster((r) => ({
+      positions: Object.fromEntries(
+        POSITIONS.map((p) => [p.key, r.positions[p.key].map(apply)]),
+      ) as Roster["positions"],
+      subs: r.subs.map(apply),
+    }));
     setError("");
   };
 
-  const trimmedRoster = () => {
-    const trimmed = Object.fromEntries(
-      POSITIONS.map((p) => [p.key, roster[p.key].map((n) => n.trim())]),
-    ) as Roster;
-    const missing = POSITIONS.filter((p) => trimmed[p.key].some((n) => !n));
+  const addSub = () => setRoster((r) => ({ ...r, subs: [...r.subs, newPlayer()] }));
+  const removeSub = (id: string) => setRoster((r) => ({ ...r, subs: r.subs.filter((s) => s.id !== id) }));
+
+  // Bỏ khoảng trắng thừa, bỏ ô dự bị để trống; báo vị trí còn thiếu người
+  const cleanRoster = () => {
+    const trim = (p: Player) => ({ ...p, name: p.name.trim() });
+    const cleaned: Roster = {
+      positions: Object.fromEntries(
+        POSITIONS.map((p) => [p.key, roster.positions[p.key].map(trim)]),
+      ) as Roster["positions"],
+      subs: roster.subs.map(trim).filter((s) => s.name),
+    };
+    const missing = POSITIONS.filter((p) => cleaned.positions[p.key].some((pl) => !pl.name));
     if (missing.length) {
       setError(`Còn thiếu người ở vị trí: ${missing.map((p) => p.key).join(", ")}`);
       return null;
     }
-    return trimmed;
+    return cleaned;
   };
 
   const doSplit = async (otp?: { otp: string; otpToken: string }) => {
-    const trimmed = trimmedRoster();
-    if (!trimmed) return false;
+    const cleaned = cleanRoster();
+    if (!cleaned) return false;
     setBusy(true);
     setError("");
     try {
-      const data = await postJson<{ result: [Lineup, Lineup] }>("/api/split", {
-        roster: trimmed,
+      const data = await postJson<{ teams: [Team, Team] }>("/api/split", {
+        roster: cleaned,
         resplit: Boolean(otp),
         ...otp,
       });
-      setRoster(trimmed);
-      setResult(data.result);
+      setRoster(cleaned);
+      setTeams(data.teams);
       setLockUntil(Date.now() + LOCK_MS);
       setCopied(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -117,7 +222,7 @@ export default function TeamSplitter() {
 
   // Đã chia đội gần đây thì phải có OTP mới được chia tiếp
   const handleSplit = () => {
-    if (!trimmedRoster()) return;
+    if (!cleanRoster()) return;
     if (Date.now() < lockUntil) {
       setOtpCode("");
       setOtpError("");
@@ -152,10 +257,12 @@ export default function TeamSplitter() {
     }
   };
 
+  const resolved = teams ? resolveTeams(roster, teams) : null;
+
   const handleCopy = async () => {
-    if (!result) return;
+    if (!resolved) return;
     try {
-      await navigator.clipboard.writeText(resultText(result));
+      await navigator.clipboard.writeText(resultText(resolved));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -164,9 +271,9 @@ export default function TeamSplitter() {
   };
 
   const handleClear = () => {
-    if (!confirm("Xóa toàn bộ danh sách đã nhập?")) return;
+    if (!confirm("Xóa toàn bộ danh sách đã nhập (cả ảnh)?")) return;
     setRoster(emptyRoster());
-    setResult(null);
+    setTeams(null);
     setError("");
   };
 
@@ -208,12 +315,12 @@ export default function TeamSplitter() {
     </div>
   );
 
-  if (result) {
+  if (resolved) {
     return (
       <div className="flex flex-col items-center gap-6">
-        <div className="grid w-full max-w-4xl grid-cols-1 justify-items-center gap-8 md:grid-cols-2">
+        <div className="grid w-full max-w-4xl grid-cols-1 items-start justify-items-center gap-8 md:grid-cols-2">
           {TEAMS.map((t, i) => (
-            <Pitch key={t.name} name={t.name} lineup={result[i]} kit={t.kit} />
+            <Pitch key={t.name} name={t.name} team={resolved[i]} kit={t.kit} />
           ))}
         </div>
         <div className="sticky bottom-0 flex w-full max-w-md justify-center gap-2 bg-[var(--background)]/90 py-3 backdrop-blur">
@@ -223,7 +330,7 @@ export default function TeamSplitter() {
           <button onClick={handleCopy} className="btn btn-secondary flex-1">
             {copied ? "✓ Đã chép" : "📋 Sao chép"}
           </button>
-          <button onClick={() => setResult(null)} className="btn btn-secondary flex-1">
+          <button onClick={() => setTeams(null)} className="btn btn-secondary flex-1">
             ✏️ Sửa tên
           </button>
         </div>
@@ -236,8 +343,8 @@ export default function TeamSplitter() {
   return (
     <div className="mx-auto w-full max-w-xl">
       <p className="mb-4 text-center text-sm text-white/70">
-        Nhập 2 người đá cùng một vị trí. Bấm <b>Chia đội</b>, mỗi vị trí sẽ chia ngẫu nhiên
-        1 người sang mỗi đội.
+        Nhập 2 người đá cùng một vị trí, bấm 📷 để thêm ảnh. Bấm <b>Chia đội</b>, mỗi vị trí sẽ chia
+        ngẫu nhiên 1 người sang mỗi đội, dự bị chia đều hai bên.
       </p>
       <ul className="flex flex-col gap-3">
         {POSITIONS.map((p) => (
@@ -247,20 +354,43 @@ export default function TeamSplitter() {
               <span className="text-sm text-white/70">{p.label}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {([0, 1] as const).map((idx) => (
-                <input
-                  key={idx}
-                  value={roster[p.key][idx]}
-                  onChange={(e) => setName(p.key, idx, e.target.value)}
+              {roster.positions[p.key].map((pl, idx) => (
+                <PlayerInput
+                  key={pl.id}
+                  player={pl}
                   placeholder={`Người ${idx + 1}`}
-                  aria-label={`${p.label} - người ${idx + 1}`}
-                  maxLength={40}
-                  className="min-w-0 rounded-lg bg-white/90 px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-yellow-400"
+                  label={`${p.label} - người ${idx + 1}`}
+                  onChange={(patch) => updatePlayer(pl.id, patch)}
+                  onError={setError}
                 />
               ))}
             </div>
           </li>
         ))}
+        <li className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="rounded bg-[#6b1230] px-2 py-0.5 text-sm font-extrabold">DB</span>
+            <span className="text-sm text-white/70">Dự bị ({roster.subs.length}/{MAX_SUBS})</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {roster.subs.map((s, idx) => (
+              <PlayerInput
+                key={s.id}
+                player={s}
+                placeholder={`Dự bị ${idx + 1}`}
+                label={`Dự bị ${idx + 1}`}
+                onChange={(patch) => updatePlayer(s.id, patch)}
+                onError={setError}
+                onRemove={() => removeSub(s.id)}
+              />
+            ))}
+            {roster.subs.length < MAX_SUBS && (
+              <button onClick={addSub} className="btn btn-secondary w-full py-2.5 text-sm">
+                ＋ Thêm dự bị
+              </button>
+            )}
+          </div>
+        </li>
       </ul>
       {error && <p className="mt-3 text-center text-sm text-red-300">{error}</p>}
       <div className="sticky bottom-0 mt-4 flex gap-2 bg-[var(--background)]/90 py-3 backdrop-blur">

@@ -1,9 +1,16 @@
-import { POSITIONS, type Lineup } from "@/lib/formation";
-import { SHIRT_BODY_PATH, SHIRT_COLLAR_PATH, SHIRT_PATH, type Kit } from "@/lib/teams";
+import Image from "next/image";
+import { POSITIONS, type Player } from "@/lib/formation";
+import {
+  SHIRT_BODY_PATH,
+  SHIRT_COLLAR_PATH,
+  SHIRT_PATH,
+  type Kit,
+  type ResolvedTeam,
+} from "@/lib/teams";
 
 type Props = {
   name: string;
-  lineup: Lineup;
+  team: ResolvedTeam;
   kit: Kit;
 };
 
@@ -58,7 +65,36 @@ function PitchLines() {
   );
 }
 
-export default function Pitch({ name, lineup, kit }: Props) {
+// Ảnh cầu thủ (nếu có) kèm nhãn vị trí, không có ảnh thì hiện áo đấu
+function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; label?: string; size: "lg" | "sm" }) {
+  const box = size === "lg" ? "h-12 w-12 sm:h-16 sm:w-16" : "h-10 w-10";
+  if (!player.photo) {
+    return <Shirt kit={kit} label={label ?? ""} />;
+  }
+  return (
+    <div className="relative flex flex-col items-center">
+      <Image
+        src={player.photo}
+        alt={player.name}
+        width={96}
+        height={96}
+        unoptimized
+        className={`${box} rounded-full border-[3px] object-cover shadow-md`}
+        style={{ borderColor: kit.body }}
+      />
+      {label && (
+        <span
+          className="-mt-2.5 rounded px-1 text-[9px] font-extrabold leading-tight sm:text-[10px]"
+          style={{ background: kit.body, color: kit.text, boxShadow: `0 0 0 1.5px ${kit.trim}` }}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function Pitch({ name, team, kit }: Props) {
   return (
     <section className="w-full max-w-md">
       <h2 className="mb-2 flex items-center justify-center gap-2 text-lg font-extrabold uppercase tracking-wide">
@@ -76,22 +112,42 @@ export default function Pitch({ name, lineup, kit }: Props) {
         }}
       >
         <PitchLines />
-        {POSITIONS.map((p) => (
-          <div
-            key={p.key}
-            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-            style={{ left: `${p.x}%`, top: `${p.y}%` }}
-          >
-            <Shirt kit={kit} label={p.key} />
-            <span
-              className="-mt-1 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
-              title={lineup[p.key]}
+        {POSITIONS.map((p) => {
+          const player = team.lineup[p.key];
+          return (
+            <div
+              key={p.key}
+              className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+              style={{ left: `${p.x}%`, top: `${p.y}%` }}
             >
-              {lineup[p.key]}
-            </span>
-          </div>
-        ))}
+              <PlayerBadge player={player} kit={kit} label={p.key} size="lg" />
+              <span
+                className="mt-0.5 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
+                title={player.name}
+              >
+                {player.name}
+              </span>
+            </div>
+          );
+        })}
       </div>
+      {team.subs.length > 0 && (
+        <div className="mt-3 rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+          <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-yellow-400">
+            Dự bị ({team.subs.length})
+          </h3>
+          <ul className="grid grid-cols-3 gap-2">
+            {team.subs.map((s) => (
+              <li key={s.id} className="flex min-w-0 flex-col items-center gap-1">
+                <PlayerBadge player={s} kit={kit} size="sm" />
+                <span className="max-w-full truncate text-xs font-bold uppercase" title={s.name}>
+                  {s.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
