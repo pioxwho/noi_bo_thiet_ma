@@ -39,3 +39,19 @@ export function splitTeams(roster: Roster): [Lineup, Lineup] {
   }
   return [a, b];
 }
+
+const MAX_NAME = 40;
+
+// Kiểm tra dữ liệu gửi lên server: đủ 2 người, tên không rỗng
+export function parseRoster(input: unknown): Roster | null {
+  if (!input || typeof input !== "object") return null;
+  const roster = {} as Roster;
+  for (const { key } of POSITIONS) {
+    const pair = (input as Record<string, unknown>)[key];
+    if (!Array.isArray(pair) || pair.length !== 2) return null;
+    const names = pair.map((n) => (typeof n === "string" ? n.trim() : ""));
+    if (names.some((n) => !n || n.length > MAX_NAME)) return null;
+    roster[key] = [names[0], names[1]];
+  }
+  return roster;
+}

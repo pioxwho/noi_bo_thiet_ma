@@ -1,32 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Pitch, { type Kit } from "@/components/Pitch";
-import {
-  POSITIONS,
-  emptyRoster,
-  splitTeams,
-  type Lineup,
-  type PositionKey,
-  type Roster,
-} from "@/lib/formation";
+import Pitch from "@/components/Pitch";
+import { POSITIONS, emptyRoster, type Lineup, type PositionKey, type Roster } from "@/lib/formation";
+import { TEAMS, resultText } from "@/lib/teams";
 
 const STORAGE_KEY = "noibothietma:v1";
+// Sau khi chia đội, muốn chia lại trong khoảng này phải nhập OTP
+const LOCK_MS = 6 * 60 * 60 * 1000;
+const OTP_COOLDOWN_S = 60;
 
-const TEAMS: { name: string; kit: Kit; emoji: string }[] = [
-  {
-    name: "Áo BĐN",
-    kit: { body: "#141414", sleeve: "#141414", trim: "#c8102e", text: "#ffffff" },
-    emoji: "⚫",
-  },
-  {
-    name: "Áo TBN",
-    kit: { body: "#c8102e", sleeve: "#ffffff", trim: "#ffffff", text: "#ffffff" },
-    emoji: "🔴",
-  },
-];
-
-type Saved = { roster: Roster; result: [Lineup, Lineup] | null };
+type Saved = { roster: Roster; result: [Lineup, Lineup] | null; lockUntil?: number };
 
 function load(): Saved | null {
   try {
@@ -45,11 +29,15 @@ function save(data: Saved) {
   }
 }
 
-function resultText(result: [Lineup, Lineup]) {
-  const team = (i: number) =>
-    `${TEAMS[i].emoji} ${TEAMS[i].name.toUpperCase()}\n` +
-    POSITIONS.map((p) => `${p.key}: ${result[i][p.key]}`).join("\n");
-  return `⚽ FC THIẾT MÃ\n\n${team(0)}\n\n${team(1)}`;
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Có lỗi xảy ra, thử lại sau.");
+  return data as T;
 }
 
 export default function TeamSplitter() {
@@ -57,12 +45,27 @@ export default function TeamSplitter() {
   const [saved] = useState(load);
   const [roster, setRoster] = useState<Roster>(() => ({ ...emptyRoster(), ...saved?.roster }));
   const [result, setResult] = useState<[Lineup, Lineup] | null>(saved?.result ?? null);
+  const [lockUntil, setLockUntil] = useState(saved?.lockUntil ?? 0);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Hộp nhập OTP
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
-    save({ roster, result });
-  }, [roster, result]);
+    save({ roster, result, lockUntil });
+  }, [roster, result, lockUntil]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   const setName = (key: PositionKey, idx: 0 | 1, value: string) => {
     setRoster((r) => {
@@ -73,19 +76,80 @@ export default function TeamSplitter() {
     setError("");
   };
 
-  const handleSplit = () => {
+  const trimmedRoster = () => {
     const trimmed = Object.fromEntries(
       POSITIONS.map((p) => [p.key, roster[p.key].map((n) => n.trim())]),
     ) as Roster;
     const missing = POSITIONS.filter((p) => trimmed[p.key].some((n) => !n));
     if (missing.length) {
       setError(`Còn thiếu người ở vị trí: ${missing.map((p) => p.key).join(", ")}`);
+      return null;
+    }
+    return trimmed;
+  };
+
+  const doSplit = async (otp?: { otp: string; otpToken: string }) => {
+    const trimmed = trimmedRoster();
+    if (!trimmed) return false;
+    setBusy(true);
+    setError("");
+    try {
+      const data = await postJson<{ result: [Lineup, Lineup] }>("/api/split", {
+        roster: trimmed,
+        resplit: Boolean(otp),
+        ...otp,
+      });
+      setRoster(trimmed);
+      setResult(data.result);
+      setLockUntil(Date.now() + LOCK_MS);
+      setCopied(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return true;
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (otp) setOtpError(msg);
+      else setError(msg);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Đã chia đội gần đây thì phải có OTP mới được chia tiếp
+  const handleSplit = () => {
+    if (!trimmedRoster()) return;
+    if (Date.now() < lockUntil) {
+      setOtpCode("");
+      setOtpError("");
+      setOtpOpen(true);
       return;
     }
-    setRoster(trimmed);
-    setResult(splitTeams(trimmed));
-    setCopied(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    doSplit();
+  };
+
+  const requestOtp = async () => {
+    setOtpError("");
+    setBusy(true);
+    try {
+      const data = await postJson<{ token: string }>("/api/otp");
+      setOtpToken(data.token);
+      setCooldown(OTP_COOLDOWN_S);
+    } catch (e) {
+      setOtpError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmOtp = async () => {
+    if (!/^\d{6}$/.test(otpCode)) {
+      setOtpError("Mã OTP gồm 6 chữ số.");
+      return;
+    }
+    if (await doSplit({ otp: otpCode, otpToken })) {
+      setOtpOpen(false);
+      setOtpToken("");
+    }
   };
 
   const handleCopy = async () => {
@@ -106,6 +170,44 @@ export default function TeamSplitter() {
     setError("");
   };
 
+  const otpDialog = otpOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-[#173322] p-5 shadow-2xl ring-1 ring-white/15">
+        <h2 className="mb-1 text-lg font-extrabold text-yellow-400">Nhập mã OTP để chia lại</h2>
+        <p className="mb-4 text-sm text-white/70">
+          Đội đã được chia. Muốn chia lại cần mã OTP gửi tới email quản lý.
+        </p>
+        <button onClick={requestOtp} disabled={busy || cooldown > 0} className="btn btn-secondary mb-3 w-full disabled:opacity-50">
+          {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : otpToken ? "📧 Gửi lại mã OTP" : "📧 Gửi mã OTP"}
+        </button>
+        {otpToken && (
+          <input
+            value={otpCode}
+            onChange={(e) => {
+              setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+              setOtpError("");
+            }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="Mã 6 số"
+            aria-label="Mã OTP"
+            autoFocus
+            className="mb-3 w-full rounded-lg bg-white/90 px-3 py-2.5 text-center text-2xl font-bold tracking-[0.4em] text-zinc-900 outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+        )}
+        {otpError && <p className="mb-3 text-center text-sm text-red-300">{otpError}</p>}
+        <div className="flex gap-2">
+          <button onClick={() => setOtpOpen(false)} className="btn btn-secondary flex-1">
+            Hủy
+          </button>
+          <button onClick={confirmOtp} disabled={busy || !otpToken} className="btn btn-primary flex-1 disabled:opacity-50">
+            {busy && otpToken ? "Đang chia..." : "Xác nhận"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (result) {
     return (
       <div className="flex flex-col items-center gap-6">
@@ -115,7 +217,7 @@ export default function TeamSplitter() {
           ))}
         </div>
         <div className="sticky bottom-0 flex w-full max-w-md justify-center gap-2 bg-[var(--background)]/90 py-3 backdrop-blur">
-          <button onClick={handleSplit} className="btn btn-primary flex-1">
+          <button onClick={handleSplit} disabled={busy} className="btn btn-primary flex-1 disabled:opacity-50">
             🎲 Chia lại
           </button>
           <button onClick={handleCopy} className="btn btn-secondary flex-1">
@@ -126,6 +228,7 @@ export default function TeamSplitter() {
           </button>
         </div>
         {error && <p className="text-sm text-red-300">{error}</p>}
+        {otpDialog}
       </div>
     );
   }
@@ -151,6 +254,7 @@ export default function TeamSplitter() {
                   onChange={(e) => setName(p.key, idx, e.target.value)}
                   placeholder={`Người ${idx + 1}`}
                   aria-label={`${p.label} - người ${idx + 1}`}
+                  maxLength={40}
                   className="min-w-0 rounded-lg bg-white/90 px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-yellow-400"
                 />
               ))}
@@ -163,10 +267,11 @@ export default function TeamSplitter() {
         <button onClick={handleClear} className="btn btn-secondary">
           Xóa hết
         </button>
-        <button onClick={handleSplit} className="btn btn-primary flex-1 text-lg">
-          ⚽ Chia đội
+        <button onClick={handleSplit} disabled={busy} className="btn btn-primary flex-1 text-lg disabled:opacity-50">
+          {busy ? "Đang chia..." : "⚽ Chia đội"}
         </button>
       </div>
+      {otpDialog}
     </div>
   );
 }

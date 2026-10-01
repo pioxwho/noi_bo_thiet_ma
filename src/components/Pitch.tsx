@@ -1,11 +1,5 @@
 import { POSITIONS, type Lineup } from "@/lib/formation";
-
-export type Kit = {
-  body: string; // màu thân áo
-  sleeve: string; // màu tay áo
-  trim: string; // màu cổ áo
-  text: string; // màu chữ trên áo
-};
+import { SHIRT_BODY_PATH, SHIRT_COLLAR_PATH, SHIRT_PATH, type Kit } from "@/lib/teams";
 
 type Props = {
   name: string;
@@ -17,13 +11,13 @@ function Shirt({ kit, label }: { kit: Kit; label: string }) {
   return (
     <svg viewBox="0 0 60 56" className="w-11 sm:w-14 drop-shadow-md" aria-hidden>
       <path
-        d="M20 2 L8 7 L1 20 L10 25 L13 20 L13 54 L47 54 L47 20 L50 25 L59 20 L52 7 L40 2 Q30 10 20 2 Z"
+        d={SHIRT_PATH}
         fill={kit.sleeve}
       />
-      <path d="M20 2 Q30 10 40 2 L47 8 L47 54 L13 54 L13 8 Z" fill={kit.body} />
-      <path d="M20 2 Q30 10 40 2" fill="none" stroke={kit.trim} strokeWidth="3" />
+      <path d={SHIRT_BODY_PATH} fill={kit.body} />
+      <path d={SHIRT_COLLAR_PATH} fill="none" stroke={kit.trim} strokeWidth="3" />
       <path
-        d="M20 2 L8 7 L1 20 L10 25 L13 20 L13 54 L47 54 L47 20 L50 25 L59 20 L52 7 L40 2 Q30 10 20 2 Z"
+        d={SHIRT_PATH}
         fill="none"
         stroke="rgba(0,0,0,.35)"
         strokeWidth="1.5"
