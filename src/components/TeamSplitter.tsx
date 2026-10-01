@@ -7,6 +7,7 @@ import {
   MAX_NAME,
   MAX_SUBS,
   POSITIONS,
+  buildTeams,
   emptyRoster,
   newPlayer,
   type Player,
@@ -76,17 +77,6 @@ function save(data: Saved) {
   } catch {
     // Trình duyệt chặn lưu trữ hoặc hết dung lượng: bỏ qua
   }
-}
-
-async function postJson<T>(url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Có lỗi xảy ra, thử lại sau.");
-  return data as T;
 }
 
 // Cắt ảnh vuông ở giữa và thu nhỏ để lưu và gửi đi nhẹ
@@ -201,7 +191,6 @@ export default function TeamSplitter() {
   const [result, setResult] = useState<SplitResult | null>(saved?.result ?? null);
   const [showResult, setShowResult] = useState(Boolean(saved?.result));
   const [error, setError] = useState("");
-  const [splitting, setSplitting] = useState(false);
 
   useEffect(() => {
     save({ roster, result });
@@ -246,22 +235,14 @@ export default function TeamSplitter() {
     return cleaned;
   };
 
-  const handleSplit = async () => {
+  const handleSplit = () => {
     const cleaned = cleanRoster();
     if (!cleaned) return;
-    setSplitting(true);
     setError("");
-    try {
-      const data = await postJson<{ teams: [Team, Team] }>("/api/split", { roster: cleaned });
-      setRoster(cleaned);
-      setResult({ roster: cleaned, teams: data.teams, at: Date.now() });
-      setShowResult(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSplitting(false);
-    }
+    setRoster(cleaned);
+    setResult({ roster: cleaned, teams: buildTeams(cleaned), at: Date.now() });
+    setShowResult(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const resolved = result ? resolveTeams(result.roster, result.teams) : null;
@@ -272,20 +253,6 @@ export default function TeamSplitter() {
     setResult(null);
     setError("");
   };
-
-  // Màn hình chờ khi đang chia đội và gửi email
-  const splittingOverlay = splitting && (
-    <div className="anim-backdrop fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/75 backdrop-blur-sm">
-      <div className="flex h-24 w-24 flex-col items-center justify-end">
-        <span className="anim-ball text-5xl leading-none" aria-hidden>
-          ⚽
-        </span>
-        <span className="anim-shadow mt-1 h-2 w-12 rounded-full bg-black/70" />
-      </div>
-      <p className="text-lg font-extrabold text-yellow-400">Đang chia đội...</p>
-      <p className="text-sm text-white/60">Đang gửi ảnh đội hình về email</p>
-    </div>
-  );
 
   if (resolved && showResult) {
     return (
@@ -306,7 +273,6 @@ export default function TeamSplitter() {
           </div>
         </div>
         {error && <p className="anim-fade-up text-sm text-red-300">{error}</p>}
-        {splittingOverlay}
       </div>
     );
   }
@@ -405,11 +371,10 @@ export default function TeamSplitter() {
         <button onClick={handleClear} className="btn btn-secondary">
           Xóa hết
         </button>
-        <button onClick={handleSplit} disabled={splitting} className="btn btn-primary flex-1 text-lg disabled:opacity-50">
+        <button onClick={handleSplit} className="btn btn-primary flex-1 text-lg">
           ⚽ Chia đội
         </button>
       </div>
-      {splittingOverlay}
     </div>
   );
 }

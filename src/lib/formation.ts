@@ -22,9 +22,6 @@ export const POSITIONS: Position[] = [
 
 export const MAX_NAME = 40;
 export const MAX_SUBS = 5; // mỗi đội
-// Ảnh đại diện đã thu nhỏ ở trình duyệt (JPEG base64)
-const MAX_PHOTO_LENGTH = 200_000;
-const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
 
 export type Player = { id: string; name: string; photo?: string };
 
@@ -60,43 +57,4 @@ export function buildTeams(roster: Roster): [Team, Team] {
     subs: roster.subs[i].map((p) => p.id),
   });
   return [team(0), team(1)];
-}
-
-function parsePlayer(input: unknown): Player | null {
-  if (!input || typeof input !== "object") return null;
-  const { id, name, photo } = input as Record<string, unknown>;
-  if (typeof id !== "string" || !id || id.length > 40) return null;
-  if (typeof name !== "string" || !name.trim() || name.trim().length > MAX_NAME) return null;
-  if (photo !== undefined && (typeof photo !== "string" || photo.length > MAX_PHOTO_LENGTH || !PHOTO_RE.test(photo))) {
-    return null;
-  }
-  return { id, name: name.trim(), ...(photo ? { photo } : {}) };
-}
-
-// Kiểm tra dữ liệu gửi lên server: đủ 2 người mỗi vị trí, tên không rỗng, ảnh hợp lệ
-export function parseRoster(input: unknown): Roster | null {
-  if (!input || typeof input !== "object") return null;
-  const { positions, subs } = input as Record<string, unknown>;
-  if (!positions || typeof positions !== "object") return null;
-  if (!Array.isArray(subs) || subs.length !== 2 || subs.some((s) => !Array.isArray(s) || s.length > MAX_SUBS)) {
-    return null;
-  }
-
-  const roster: Roster = { positions: {} as Roster["positions"], subs: [[], []] };
-  for (const { key } of POSITIONS) {
-    const pair = (positions as Record<string, unknown>)[key];
-    if (!Array.isArray(pair) || pair.length !== 2) return null;
-    const [a, b] = pair.map(parsePlayer);
-    if (!a || !b) return null;
-    roster.positions[key] = [a, b];
-  }
-  for (const i of [0, 1] as const) {
-    for (const s of subs[i] as unknown[]) {
-      const p = parsePlayer(s);
-      if (!p) return null;
-      roster.subs[i].push(p);
-    }
-  }
-  const ids = allPlayers(roster).map((p) => p.id);
-  return new Set(ids).size === ids.length ? roster : null;
 }

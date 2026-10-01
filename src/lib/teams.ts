@@ -38,11 +38,3 @@ export function resolveTeams(roster: Roster, teams: [Team, Team]) {
 }
 
 export type ResolvedTeam = ReturnType<typeof resolveTeams>[number];
-
-export function resultText(teams: ResolvedTeam[]) {
-  const team = (i: number) =>
-    `${TEAMS[i].emoji} ${TEAMS[i].name.toUpperCase()}\n` +
-    POSITIONS.map((p) => `${p.short}: ${teams[i].lineup[p.key].name}`).join("\n") +
-    (teams[i].subs.length ? `\nDự bị: ${teams[i].subs.map((s) => s.name).join(", ")}` : "");
-  return `⚽ FC THIẾT MÃ\n\n${team(0)}\n\n${team(1)}`;
-}
