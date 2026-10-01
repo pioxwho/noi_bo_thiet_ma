@@ -241,14 +241,14 @@ function TeamColumn({ name, kit, team, showBench }: { name: string; kit: Kit; te
               style={{
                 position: "absolute",
                 left: (p.x / 100) * PITCH_W - 90,
-                top: (p.y / 100) * PITCH_H - (player.photo ? 68 : 44),
+                top: (p.y / 100) * PITCH_H - (player.photo ? 62 : 44),
                 width: 180,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
               }}
             >
-              <PlayerBadge player={player} kit={kit} label={p.key} size={100} />
+              <PlayerBadge player={player} kit={kit} label={p.short} size={88} />
               <div style={{ ...nameStyle, marginTop: player.photo ? 2 : -4 }}>{player.name}</div>
             </div>
           );

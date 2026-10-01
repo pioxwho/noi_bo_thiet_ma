@@ -1,22 +1,23 @@
-export type PositionKey = "GK" | "LB" | "CB" | "RB" | "CAM" | "LW" | "RW";
+export type PositionKey = "GK" | "LB" | "CB" | "RB" | "LCM" | "RCM" | "ST";
 
 export type Position = {
   key: PositionKey;
+  short: string; // nhãn hiển thị trên sân (2 tiền vệ cùng là CM)
   label: string;
   // Tọa độ trên sân (%), đội tấn công lên phía trên
   x: number;
   y: number;
 };
 
-// Thứ tự nhập: từ thủ môn lên hàng công
+// Sơ đồ 1-3-2-1, thứ tự nhập từ thủ môn lên tiền đạo
 export const POSITIONS: Position[] = [
-  { key: "GK", label: "Thủ môn", x: 50, y: 89 },
-  { key: "LB", label: "Hậu vệ trái", x: 17, y: 64 },
-  { key: "CB", label: "Trung vệ", x: 50, y: 68 },
-  { key: "RB", label: "Hậu vệ phải", x: 83, y: 64 },
-  { key: "CAM", label: "Tiền vệ tấn công", x: 50, y: 40 },
-  { key: "LW", label: "Tiền đạo cánh trái", x: 21, y: 16 },
-  { key: "RW", label: "Tiền đạo cánh phải", x: 79, y: 16 },
+  { key: "GK", short: "GK", label: "Thủ môn", x: 50, y: 89 },
+  { key: "LB", short: "LB", label: "Hậu vệ trái", x: 17, y: 64 },
+  { key: "CB", short: "CB", label: "Trung vệ", x: 50, y: 66 },
+  { key: "RB", short: "RB", label: "Hậu vệ phải", x: 83, y: 64 },
+  { key: "LCM", short: "CM", label: "Tiền vệ trung tâm (trái)", x: 29, y: 40 },
+  { key: "RCM", short: "CM", label: "Tiền vệ trung tâm (phải)", x: 71, y: 40 },
+  { key: "ST", short: "ST", label: "Tiền đạo", x: 50, y: 14 },
 ];
 
 export const MAX_NAME = 40;

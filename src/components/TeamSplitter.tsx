@@ -223,7 +223,7 @@ export default function TeamSplitter() {
     };
     const missing = POSITIONS.filter((p) => cleaned.positions[p.key].some((pl) => !pl.name));
     if (missing.length) {
-      setError(`Còn thiếu người ở vị trí: ${missing.map((p) => p.key).join(", ")}`);
+      setError(`Còn thiếu người ở: ${missing.map((p) => p.label).join(", ")}`);
       return null;
     }
     return cleaned;
@@ -423,7 +423,7 @@ export default function TeamSplitter() {
           <li key={p.key} className="card anim-fade-up" style={{ animationDelay: `${0.05 + i * 0.05}s` }}>
             <div className="mb-2 flex items-baseline gap-2">
               <span className="rounded-md bg-gradient-to-b from-[#8a1538] to-[#5a0f29] px-2 py-0.5 text-sm font-extrabold shadow">
-                {p.key}
+                {p.short}
               </span>
               <span className="text-sm text-white/70">{p.label}</span>
             </div>

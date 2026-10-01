@@ -68,7 +68,7 @@ function PitchLines() {
 
 // Ảnh cầu thủ (nếu có) kèm nhãn vị trí, không có ảnh thì hiện áo đấu
 function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; label?: string; size: "lg" | "sm" }) {
-  const box = size === "lg" ? "h-16 w-16 sm:h-24 sm:w-24" : "h-14 w-14";
+  const box = size === "lg" ? "h-14 w-14 sm:h-20 sm:w-20" : "h-12 w-12";
   if (!player.photo) {
     return <Shirt kit={kit} label={label ?? ""} />;
   }
@@ -80,7 +80,7 @@ function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; l
         width={192}
         height={192}
         unoptimized
-        className={`${box} rounded-full border-[3px] object-cover shadow-md`}
+        className={`${box} shrink-0 rounded-full border-[3px] object-cover shadow-md`}
         style={{ borderColor: kit.body }}
       />
       {label && (
@@ -125,11 +125,11 @@ export default function Pitch({ name, team, kit, index }: Props) {
           return (
             <div
               key={p.key}
-              className="absolute -translate-x-1/2 -translate-y-1/2"
+              className="absolute w-max -translate-x-1/2 -translate-y-1/2"
               style={{ left: `${p.x}%`, top: `${p.y}%` }}
             >
               <div className="anim-pop-in flex flex-col items-center transition-transform duration-200 hover:scale-110" style={delay(i)}>
-                <PlayerBadge player={player} kit={kit} label={p.key} size="lg" />
+                <PlayerBadge player={player} kit={kit} label={p.short} size="lg" />
                 <span
                   className="mt-0.5 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
                   title={player.name}

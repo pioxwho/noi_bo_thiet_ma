@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const tables = TEAMS.map(
       (t, i) =>
         `<h3>${t.emoji} ${escapeHtml(t.name)}</h3><ul>` +
-        POSITIONS.map((p) => `<li><b>${p.key}</b>: ${escapeHtml(resolved[i].lineup[p.key].name)}</li>`).join("") +
+        POSITIONS.map((p) => `<li><b>${p.short}</b>: ${escapeHtml(resolved[i].lineup[p.key].name)}</li>`).join("") +
         (resolved[i].subs.length
           ? `<li><b>Dự bị</b>: ${resolved[i].subs.map((s) => escapeHtml(s.name)).join(", ")}</li>`
           : "") +
