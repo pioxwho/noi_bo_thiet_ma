@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Pitch from "@/components/Pitch";
+import Pitch, { type Kit } from "@/components/Pitch";
 import {
   POSITIONS,
   emptyRoster,
@@ -13,9 +13,17 @@ import {
 
 const STORAGE_KEY = "noibothietma:v1";
 
-const TEAMS = [
-  { name: "Đội Đỏ", shirt: "#d7262e", shirtText: "#ffe066", emoji: "🔴" },
-  { name: "Đội Xanh", shirt: "#1f5fd1", shirtText: "#ffffff", emoji: "🔵" },
+const TEAMS: { name: string; kit: Kit; emoji: string }[] = [
+  {
+    name: "Áo BĐN",
+    kit: { body: "#141414", sleeve: "#141414", trim: "#c8102e", text: "#ffffff" },
+    emoji: "⚫",
+  },
+  {
+    name: "Áo TBN",
+    kit: { body: "#c8102e", sleeve: "#ffffff", trim: "#ffffff", text: "#ffffff" },
+    emoji: "🔴",
+  },
 ];
 
 type Saved = { roster: Roster; result: [Lineup, Lineup] | null };
@@ -41,7 +49,7 @@ function resultText(result: [Lineup, Lineup]) {
   const team = (i: number) =>
     `${TEAMS[i].emoji} ${TEAMS[i].name.toUpperCase()}\n` +
     POSITIONS.map((p) => `${p.key}: ${result[i][p.key]}`).join("\n");
-  return `⚽ CHIA ĐỘI SÂN 7\n\n${team(0)}\n\n${team(1)}`;
+  return `⚽ FC THIẾT MÃ\n\n${team(0)}\n\n${team(1)}`;
 }
 
 export default function TeamSplitter() {
@@ -103,7 +111,7 @@ export default function TeamSplitter() {
       <div className="flex flex-col items-center gap-6">
         <div className="grid w-full max-w-4xl grid-cols-1 justify-items-center gap-8 md:grid-cols-2">
           {TEAMS.map((t, i) => (
-            <Pitch key={t.name} name={t.name} lineup={result[i]} shirt={t.shirt} shirtText={t.shirtText} />
+            <Pitch key={t.name} name={t.name} lineup={result[i]} kit={t.kit} />
           ))}
         </div>
         <div className="sticky bottom-0 flex w-full max-w-md justify-center gap-2 bg-[var(--background)]/90 py-3 backdrop-blur">

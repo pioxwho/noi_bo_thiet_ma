@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nội Bộ Thiết Mã",
-  description: "Nội Bộ Thiết Mã",
+  title: "FC Thiết Mã",
+  description: "Chia đội sân 7 - FC Thiết Mã",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,18 +1,30 @@
 import { POSITIONS, type Lineup } from "@/lib/formation";
 
+export type Kit = {
+  body: string; // màu thân áo
+  sleeve: string; // màu tay áo
+  trim: string; // màu cổ áo
+  text: string; // màu chữ trên áo
+};
+
 type Props = {
   name: string;
   lineup: Lineup;
-  shirt: string; // màu áo
-  shirtText: string; // màu chữ trên áo
+  kit: Kit;
 };
 
-function Shirt({ color, textColor, label }: { color: string; textColor: string; label: string }) {
+function Shirt({ kit, label }: { kit: Kit; label: string }) {
   return (
     <svg viewBox="0 0 60 56" className="w-11 sm:w-14 drop-shadow-md" aria-hidden>
       <path
         d="M20 2 L8 7 L1 20 L10 25 L13 20 L13 54 L47 54 L47 20 L50 25 L59 20 L52 7 L40 2 Q30 10 20 2 Z"
-        fill={color}
+        fill={kit.sleeve}
+      />
+      <path d="M20 2 Q30 10 40 2 L47 8 L47 54 L13 54 L13 8 Z" fill={kit.body} />
+      <path d="M20 2 Q30 10 40 2" fill="none" stroke={kit.trim} strokeWidth="3" />
+      <path
+        d="M20 2 L8 7 L1 20 L10 25 L13 20 L13 54 L47 54 L47 20 L50 25 L59 20 L52 7 L40 2 Q30 10 20 2 Z"
+        fill="none"
         stroke="rgba(0,0,0,.35)"
         strokeWidth="1.5"
         strokeLinejoin="round"
@@ -23,7 +35,7 @@ function Shirt({ color, textColor, label }: { color: string; textColor: string; 
         textAnchor="middle"
         fontSize={label.length > 2 ? 13 : 16}
         fontWeight="800"
-        fill={textColor}
+        fill={kit.text}
         fontFamily="system-ui, sans-serif"
       >
         {label}
@@ -52,11 +64,14 @@ function PitchLines() {
   );
 }
 
-export default function Pitch({ name, lineup, shirt, shirtText }: Props) {
+export default function Pitch({ name, lineup, kit }: Props) {
   return (
     <section className="w-full max-w-md">
       <h2 className="mb-2 flex items-center justify-center gap-2 text-lg font-extrabold uppercase tracking-wide">
-        <span className="inline-block h-4 w-4 rounded-full border border-white/50" style={{ background: shirt }} />
+        <span
+          className="inline-block h-4 w-4 rounded-full border-2"
+          style={{ background: kit.body, borderColor: kit.sleeve === kit.body ? kit.trim : kit.sleeve }}
+        />
         {name}
       </h2>
       <div
@@ -73,7 +88,7 @@ export default function Pitch({ name, lineup, shirt, shirtText }: Props) {
             className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
             style={{ left: `${p.x}%`, top: `${p.y}%` }}
           >
-            <Shirt color={shirt} textColor={shirtText} label={p.key} />
+            <Shirt kit={kit} label={p.key} />
             <span
               className="-mt-1 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
               title={lineup[p.key]}
