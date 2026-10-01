@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import type { Attachment } from "nodemailer/lib/mailer";
 
 // Email nhận kết quả chia đội và mã OTP
-export const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || "dvl.vanlam@gmail.com";
+export const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || "vanlam1902@gmail.com";
 
 export async function sendMail(opts: {
   subject: string;
