@@ -21,12 +21,36 @@ const LOCK_MS = 6 * 60 * 60 * 1000;
 const OTP_COOLDOWN_S = 60;
 const AVATAR_PX = 192;
 
-type Saved = { roster: Roster; teams: [Team, Team] | null; lockUntil?: number };
+// Kết quả chia kèm danh sách lúc chia, để sửa tên vẫn xem lại được đội hình cũ
+type SplitResult = { roster: Roster; teams: [Team, Team] };
+type Saved = { roster: Roster; result: SplitResult | null; lockUntil?: number };
+
+// Dữ liệu cũ có thể theo sơ đồ vị trí trước: thiếu vị trí thì thêm ô trống
+function normalizeRoster(r: Partial<Roster> | undefined): Roster {
+  const empty = emptyRoster();
+  return {
+    positions: Object.fromEntries(
+      POSITIONS.map((p) => {
+        const pair = r?.positions?.[p.key];
+        return [p.key, Array.isArray(pair) && pair.length === 2 ? pair : empty.positions[p.key]];
+      }),
+    ) as Roster["positions"],
+    subs: Array.isArray(r?.subs) ? r.subs : [],
+  };
+}
 
 function load(): Saved | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Partial<Saved>;
+    const result = data.result;
+    const resultValid = result?.teams?.every((t) => POSITIONS.every((p) => t.lineup?.[p.key]));
+    return {
+      roster: normalizeRoster(data.roster),
+      result: result && resultValid ? { roster: normalizeRoster(result.roster), teams: result.teams } : null,
+      lockUntil: data.lockUntil,
+    };
   } catch {
     return null;
   }
@@ -139,7 +163,8 @@ export default function TeamSplitter() {
   // Khôi phục danh sách đã nhập lần trước (component chỉ render ở trình duyệt)
   const [saved] = useState(load);
   const [roster, setRoster] = useState<Roster>(() => saved?.roster ?? emptyRoster());
-  const [teams, setTeams] = useState<[Team, Team] | null>(saved?.teams ?? null);
+  const [result, setResult] = useState<SplitResult | null>(saved?.result ?? null);
+  const [showResult, setShowResult] = useState(Boolean(saved?.result));
   const [lockUntil, setLockUntil] = useState(saved?.lockUntil ?? 0);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -153,8 +178,8 @@ export default function TeamSplitter() {
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
-    save({ roster, teams, lockUntil });
-  }, [roster, teams, lockUntil]);
+    save({ roster, result, lockUntil });
+  }, [roster, result, lockUntil]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -205,7 +230,8 @@ export default function TeamSplitter() {
         ...otp,
       });
       setRoster(cleaned);
-      setTeams(data.teams);
+      setResult({ roster: cleaned, teams: data.teams });
+      setShowResult(true);
       setLockUntil(Date.now() + LOCK_MS);
       setCopied(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -257,7 +283,7 @@ export default function TeamSplitter() {
     }
   };
 
-  const resolved = teams ? resolveTeams(roster, teams) : null;
+  const resolved = result ? resolveTeams(result.roster, result.teams) : null;
 
   const handleCopy = async () => {
     if (!resolved) return;
@@ -273,7 +299,7 @@ export default function TeamSplitter() {
   const handleClear = () => {
     if (!confirm("Xóa toàn bộ danh sách đã nhập (cả ảnh)?")) return;
     setRoster(emptyRoster());
-    setTeams(null);
+    setResult(null);
     setError("");
   };
 
@@ -315,7 +341,7 @@ export default function TeamSplitter() {
     </div>
   );
 
-  if (resolved) {
+  if (resolved && showResult) {
     return (
       <div className="flex flex-col items-center gap-6">
         <div className="grid w-full max-w-4xl grid-cols-1 items-start justify-items-center gap-8 md:grid-cols-2">
@@ -330,7 +356,7 @@ export default function TeamSplitter() {
           <button onClick={handleCopy} className="btn btn-secondary flex-1">
             {copied ? "✓ Đã chép" : "📋 Sao chép"}
           </button>
-          <button onClick={() => setTeams(null)} className="btn btn-secondary flex-1">
+          <button onClick={() => setShowResult(false)} className="btn btn-secondary flex-1">
             ✏️ Sửa tên
           </button>
         </div>
@@ -342,6 +368,11 @@ export default function TeamSplitter() {
 
   return (
     <div className="mx-auto w-full max-w-xl">
+      {resolved && (
+        <button onClick={() => setShowResult(true)} className="btn btn-secondary mb-4 w-full">
+          ← Xem lại đội hình vừa chia
+        </button>
+      )}
       <p className="mb-4 text-center text-sm text-white/70">
         Nhập 2 người đá cùng một vị trí, bấm 📷 để thêm ảnh. Bấm <b>Chia đội</b>, mỗi vị trí sẽ chia
         ngẫu nhiên 1 người sang mỗi đội, dự bị chia đều hai bên.

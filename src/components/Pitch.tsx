@@ -67,7 +67,7 @@ function PitchLines() {
 
 // Ảnh cầu thủ (nếu có) kèm nhãn vị trí, không có ảnh thì hiện áo đấu
 function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; label?: string; size: "lg" | "sm" }) {
-  const box = size === "lg" ? "h-12 w-12 sm:h-16 sm:w-16" : "h-10 w-10";
+  const box = size === "lg" ? "h-16 w-16 sm:h-24 sm:w-24" : "h-14 w-14";
   if (!player.photo) {
     return <Shirt kit={kit} label={label ?? ""} />;
   }
@@ -76,15 +76,15 @@ function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; l
       <Image
         src={player.photo}
         alt={player.name}
-        width={96}
-        height={96}
+        width={192}
+        height={192}
         unoptimized
         className={`${box} rounded-full border-[3px] object-cover shadow-md`}
         style={{ borderColor: kit.body }}
       />
       {label && (
         <span
-          className="-mt-2.5 rounded px-1 text-[9px] font-extrabold leading-tight sm:text-[10px]"
+          className="-mt-2.5 rounded px-1 text-[10px] font-extrabold leading-tight sm:text-xs"
           style={{ background: kit.body, color: kit.text, boxShadow: `0 0 0 1.5px ${kit.trim}` }}
         >
           {label}

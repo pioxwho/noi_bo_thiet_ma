@@ -19,7 +19,7 @@ const PITCH_H = 780;
 const LINE = "rgba(255,255,255,.75)";
 // Khu dự bị: 3 người mỗi hàng
 const SUBS_PER_ROW = 3;
-const SUB_ROW_H = 96;
+const SUB_ROW_H = 112;
 const SUBS_HEADER_H = 80;
 
 const fonts = Promise.all([
@@ -133,7 +133,7 @@ function Bench({ subs, kit }: { subs: Player[]; kit: Kit }) {
               height: SUB_ROW_H,
             }}
           >
-            <PlayerBadge player={s} kit={kit} label="" size={56} />
+            <PlayerBadge player={s} kit={kit} label="" size={72} />
             <div style={{ ...nameStyle, marginTop: 2, fontSize: 15, maxWidth: 150 }}>{s.name}</div>
           </div>
         ))}
@@ -182,14 +182,14 @@ function TeamColumn({ name, kit, team, showBench }: { name: string; kit: Kit; te
               style={{
                 position: "absolute",
                 left: (p.x / 100) * PITCH_W - 90,
-                top: (p.y / 100) * PITCH_H - (player.photo ? 56 : 44),
+                top: (p.y / 100) * PITCH_H - (player.photo ? 68 : 44),
                 width: 180,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
               }}
             >
-              <PlayerBadge player={player} kit={kit} label={p.key} size={76} />
+              <PlayerBadge player={player} kit={kit} label={p.key} size={100} />
               <div style={{ ...nameStyle, marginTop: player.photo ? 2 : -4 }}>{player.name}</div>
             </div>
           );
@@ -219,8 +219,29 @@ export async function renderLineupPng(teams: ResolvedTeam[], subtitle: string) {
           color: "#f4f4f5",
           fontFamily: "Be Vietnam Pro",
           paddingTop: 28,
+          position: "relative",
         }}
       >
+        <div
+          style={{
+            position: "absolute",
+            top: 22,
+            left: 40,
+            width: 76,
+            height: 76,
+            borderRadius: 38,
+            border: "5px solid #facc15",
+            background: "#6b1230",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+            fontWeight: 800,
+            color: "white",
+          }}
+        >
+          PIO
+        </div>
         <div style={{ display: "flex", flexShrink: 0, fontSize: 48, fontWeight: 800, color: "#facc15" }}>FC THIẾT MÃ</div>
         <div style={{ display: "flex", flexShrink: 0, fontSize: 20, color: "rgba(255,255,255,.6)", marginBottom: 18 }}>
           {subtitle}

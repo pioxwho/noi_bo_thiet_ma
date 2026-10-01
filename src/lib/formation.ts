@@ -1,4 +1,4 @@
-export type PositionKey = "GK" | "LB" | "CB" | "RB" | "CM" | "CAM" | "ST";
+export type PositionKey = "GK" | "LB" | "CB" | "RB" | "CAM" | "LW" | "RW";
 
 export type Position = {
   key: PositionKey;
@@ -8,15 +8,15 @@ export type Position = {
   y: number;
 };
 
-// Thứ tự nhập: từ thủ môn lên tiền đạo
+// Thứ tự nhập: từ thủ môn lên hàng công
 export const POSITIONS: Position[] = [
   { key: "GK", label: "Thủ môn", x: 50, y: 89 },
   { key: "LB", label: "Hậu vệ trái", x: 17, y: 64 },
-  { key: "CB", label: "Trung vệ", x: 50, y: 71 },
+  { key: "CB", label: "Trung vệ", x: 50, y: 68 },
   { key: "RB", label: "Hậu vệ phải", x: 83, y: 64 },
-  { key: "CM", label: "Tiền vệ trung tâm", x: 50, y: 50 },
-  { key: "CAM", label: "Tiền vệ tấn công", x: 50, y: 30 },
-  { key: "ST", label: "Tiền đạo", x: 50, y: 11 },
+  { key: "CAM", label: "Tiền vệ tấn công", x: 50, y: 40 },
+  { key: "LW", label: "Tiền đạo cánh trái", x: 21, y: 16 },
+  { key: "RW", label: "Tiền đạo cánh phải", x: 79, y: 16 },
 ];
 
 export const MAX_NAME = 40;
