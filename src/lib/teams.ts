@@ -7,16 +7,17 @@ export type Kit = {
   text: string; // màu chữ trên áo
 };
 
+// Đội 0 nhập ở cột trái, đội 1 nhập ở cột phải
 export const TEAMS: { name: string; kit: Kit; emoji: string }[] = [
-  {
-    name: "Áo BĐN",
-    kit: { body: "#141414", sleeve: "#141414", trim: "#c8102e", text: "#ffffff" },
-    emoji: "⚫",
-  },
   {
     name: "Áo TBN",
     kit: { body: "#c8102e", sleeve: "#ffffff", trim: "#ffffff", text: "#ffffff" },
     emoji: "🔴",
+  },
+  {
+    name: "Áo BĐN",
+    kit: { body: "#141414", sleeve: "#141414", trim: "#c8102e", text: "#ffffff" },
+    emoji: "⚫",
   },
 ];
 

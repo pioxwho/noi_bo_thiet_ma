@@ -1,13 +1,12 @@
-import { POSITIONS, parseRoster, splitTeams } from "@/lib/formation";
+import { POSITIONS, buildTeams, parseRoster } from "@/lib/formation";
 import { renderLineupPng } from "@/lib/server/lineupImage";
 import { nowVN, sendMail } from "@/lib/server/mail";
-import { verifyOtp } from "@/lib/server/otp";
 import { TEAMS, resolveTeams, resultText } from "@/lib/teams";
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-// Chia đội trên server, gửi ảnh đội hình về email quản lý rồi trả kết quả
+// Xếp đội theo cột đã nhập, gửi ảnh đội hình về email quản lý rồi trả kết quả
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const roster = parseRoster(body?.roster);
@@ -15,15 +14,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Danh sách chưa đủ 2 người ở mỗi vị trí hoặc ảnh không hợp lệ." }, { status: 400 });
   }
 
-  const resplit = body?.resplit === true;
-  if (resplit && !verifyOtp(String(body?.otp ?? ""), String(body?.otpToken ?? ""))) {
-    return Response.json({ error: "Mã OTP sai hoặc đã hết hạn." }, { status: 403 });
-  }
-
-  const teams = splitTeams(roster);
+  const teams = buildTeams(roster);
   const resolved = resolveTeams(roster, teams);
   const time = nowVN();
-  const label = resplit ? "Chia lại (đã xác thực OTP)" : "Chia đội";
+  const label = "Chia đội";
 
   try {
     const png = await renderLineupPng(resolved, `${label} · ${time}`);

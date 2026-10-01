@@ -21,20 +21,21 @@ export const POSITIONS: Position[] = [
 ];
 
 export const MAX_NAME = 40;
-export const MAX_SUBS = 10;
+export const MAX_SUBS = 5; // mỗi đội
 // Ảnh đại diện đã thu nhỏ ở trình duyệt (JPEG base64)
 const MAX_PHOTO_LENGTH = 200_000;
 const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
 
 export type Player = { id: string; name: string; photo?: string };
 
-// Mỗi vị trí có 2 người, cộng danh sách dự bị
+// Mỗi vị trí có 2 người: bên trái là đội 0 (áo TBN), bên phải là đội 1 (áo BĐN).
+// Dự bị cũng tách riêng theo từng đội.
 export type Roster = {
   positions: Record<PositionKey, [Player, Player]>;
-  subs: Player[];
+  subs: [Player[], Player[]];
 };
 
-// Kết quả chia của một đội: id cầu thủ ở từng vị trí và dự bị
+// Đội hình của một đội: id cầu thủ ở từng vị trí và dự bị
 export type Team = { lineup: Record<PositionKey, string>; subs: string[] };
 
 export const newPlayer = (): Player => ({
@@ -44,37 +45,21 @@ export const newPlayer = (): Player => ({
 
 export const emptyRoster = (): Roster => ({
   positions: Object.fromEntries(POSITIONS.map((p) => [p.key, [newPlayer(), newPlayer()]])) as Roster["positions"],
-  subs: [],
+  subs: [[], []],
 });
 
 export const allPlayers = (roster: Roster) => [
   ...POSITIONS.flatMap((p) => roster.positions[p.key]),
-  ...roster.subs,
+  ...roster.subs.flat(),
 ];
 
-const shuffle = <T,>(items: T[]) => {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-};
-
-export function splitTeams(roster: Roster): [Team, Team] {
-  const teams: [Team, Team] = [
-    { lineup: {} as Team["lineup"], subs: [] },
-    { lineup: {} as Team["lineup"], subs: [] },
-  ];
-  for (const { key } of POSITIONS) {
-    const [p1, p2] = shuffle(roster.positions[key]);
-    teams[0].lineup[key] = p1.id;
-    teams[1].lineup[key] = p2.id;
-  }
-  // Dự bị chia xen kẽ, số lẻ thì đội nhận thêm 1 người cũng ngẫu nhiên
-  const first = Math.random() < 0.5 ? 0 : 1;
-  shuffle(roster.subs).forEach((p, i) => teams[(first + i) % 2].subs.push(p.id));
-  return teams;
+// Không ngẫu nhiên: cột trái vào đội 0, cột phải vào đội 1
+export function buildTeams(roster: Roster): [Team, Team] {
+  const team = (i: 0 | 1): Team => ({
+    lineup: Object.fromEntries(POSITIONS.map((p) => [p.key, roster.positions[p.key][i].id])) as Team["lineup"],
+    subs: roster.subs[i].map((p) => p.id),
+  });
+  return [team(0), team(1)];
 }
 
 function parsePlayer(input: unknown): Player | null {
@@ -92,9 +77,12 @@ function parsePlayer(input: unknown): Player | null {
 export function parseRoster(input: unknown): Roster | null {
   if (!input || typeof input !== "object") return null;
   const { positions, subs } = input as Record<string, unknown>;
-  if (!positions || typeof positions !== "object" || !Array.isArray(subs) || subs.length > MAX_SUBS) return null;
+  if (!positions || typeof positions !== "object") return null;
+  if (!Array.isArray(subs) || subs.length !== 2 || subs.some((s) => !Array.isArray(s) || s.length > MAX_SUBS)) {
+    return null;
+  }
 
-  const roster: Roster = { positions: {} as Roster["positions"], subs: [] };
+  const roster: Roster = { positions: {} as Roster["positions"], subs: [[], []] };
   for (const { key } of POSITIONS) {
     const pair = (positions as Record<string, unknown>)[key];
     if (!Array.isArray(pair) || pair.length !== 2) return null;
@@ -102,10 +90,12 @@ export function parseRoster(input: unknown): Roster | null {
     if (!a || !b) return null;
     roster.positions[key] = [a, b];
   }
-  for (const s of subs) {
-    const p = parsePlayer(s);
-    if (!p) return null;
-    roster.subs.push(p);
+  for (const i of [0, 1] as const) {
+    for (const s of subs[i] as unknown[]) {
+      const p = parsePlayer(s);
+      if (!p) return null;
+      roster.subs[i].push(p);
+    }
   }
   const ids = allPlayers(roster).map((p) => p.id);
   return new Set(ids).size === ids.length ? roster : null;

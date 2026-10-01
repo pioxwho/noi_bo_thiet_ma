@@ -2,7 +2,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 import type { Attachment } from "nodemailer/lib/mailer";
 
-// Email nhận kết quả chia đội và mã OTP
+// Email nhận ảnh đội hình sau mỗi lần chia đội
 export const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL || "vanlam1902@gmail.com";
 
 export async function sendMail(opts: {

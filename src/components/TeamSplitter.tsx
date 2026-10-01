@@ -13,21 +13,30 @@ import {
   type Roster,
   type Team,
 } from "@/lib/formation";
-import { TEAMS, resolveTeams } from "@/lib/teams";
+import { TEAMS, resolveTeams, type Kit } from "@/lib/teams";
 
-const STORAGE_KEY = "noibothietma:v2";
-// Sau khi chia đội, muốn chia lại trong khoảng này phải nhập OTP
-const LOCK_MS = 6 * 60 * 60 * 1000;
-const OTP_COOLDOWN_S = 60;
+const STORAGE_KEY = "noibothietma:v3";
+// Bản trước (chia ngẫu nhiên, dự bị chung một danh sách): chỉ lấy lại tên và ảnh
+const OLD_STORAGE_KEY = "noibothietma:v2";
 const AVATAR_PX = 192;
 
-// Kết quả chia kèm danh sách lúc chia, để sửa tên vẫn xem lại được đội hình cũ
+// Đội hình vừa chia kèm danh sách lúc chia, để sửa tên vẫn xem lại được đội hình cũ
 type SplitResult = { roster: Roster; teams: [Team, Team]; at?: number };
-type Saved = { roster: Roster; result: SplitResult | null; lockUntil?: number };
+type Saved = { roster: Roster; result: SplitResult | null };
 
 // Dữ liệu cũ có thể theo sơ đồ vị trí trước: thiếu vị trí thì thêm ô trống
-function normalizeRoster(r: Partial<Roster> | undefined): Roster {
+function normalizeRoster(r: { positions?: Partial<Roster["positions"]>; subs?: unknown } | undefined): Roster {
   const empty = emptyRoster();
+  const subs: Roster["subs"] = [[], []];
+  if (Array.isArray(r?.subs)) {
+    if (r.subs.length === 2 && r.subs.every(Array.isArray)) {
+      subs[0] = r.subs[0] as Player[];
+      subs[1] = r.subs[1] as Player[];
+    } else {
+      // Dự bị kiểu cũ (một danh sách chung): chia lần lượt sang hai đội
+      (r.subs as Player[]).forEach((p, i) => subs[i % 2].push(p));
+    }
+  }
   return {
     positions: Object.fromEntries(
       POSITIONS.map((p) => {
@@ -35,14 +44,17 @@ function normalizeRoster(r: Partial<Roster> | undefined): Roster {
         return [p.key, Array.isArray(pair) && pair.length === 2 ? pair : empty.positions[p.key]];
       }),
     ) as Roster["positions"],
-    subs: Array.isArray(r?.subs) ? r.subs : [],
+    subs: [subs[0].slice(0, MAX_SUBS), subs[1].slice(0, MAX_SUBS)],
   };
 }
 
 function load(): Saved | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      const old = localStorage.getItem(OLD_STORAGE_KEY);
+      return old ? { roster: normalizeRoster(JSON.parse(old).roster), result: null } : null;
+    }
     const data = JSON.parse(raw) as Partial<Saved>;
     const result = data.result;
     const resultValid = result?.teams?.every((t) => POSITIONS.every((p) => t.lineup?.[p.key]));
@@ -52,7 +64,6 @@ function load(): Saved | null {
         result && resultValid
           ? { roster: normalizeRoster(result.roster), teams: result.teams, at: result.at }
           : null,
-      lockUntil: data.lockUntil,
     };
   } catch {
     return null;
@@ -91,10 +102,21 @@ async function toAvatar(file: File) {
   return canvas.toDataURL("image/jpeg", 0.8);
 }
 
+// Chấm màu áo đứng trước tên đội
+function KitDot({ kit }: { kit: Kit }) {
+  return (
+    <span
+      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2"
+      style={{ background: kit.body, borderColor: kit.sleeve === kit.body ? kit.trim : kit.sleeve }}
+    />
+  );
+}
+
 function PlayerInput({
   player,
   placeholder,
   label,
+  kit,
   onChange,
   onError,
   onRemove,
@@ -102,6 +124,7 @@ function PlayerInput({
   player: Player;
   placeholder: string;
   label: string;
+  kit: Kit;
   onChange: (patch: Partial<Player>) => void;
   onError: (msg: string) => void;
   onRemove?: () => void;
@@ -121,7 +144,8 @@ function PlayerInput({
     <div className="flex min-w-0 items-center gap-1.5">
       <div className="relative shrink-0">
         <label
-          className="flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white/15 text-lg ring-1 ring-white/25 transition duration-200 hover:scale-110 hover:bg-white/25 hover:ring-yellow-400/60"
+          className="flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 bg-white/15 text-lg transition duration-200 hover:scale-110 hover:bg-white/25"
+          style={{ borderColor: kit.body === "#141414" ? "#52525b" : kit.body }}
           title="Chọn ảnh"
         >
           {player.photo ? (
@@ -176,27 +200,12 @@ export default function TeamSplitter() {
   const [roster, setRoster] = useState<Roster>(() => saved?.roster ?? emptyRoster());
   const [result, setResult] = useState<SplitResult | null>(saved?.result ?? null);
   const [showResult, setShowResult] = useState(Boolean(saved?.result));
-  const [lockUntil, setLockUntil] = useState(saved?.lockUntil ?? 0);
   const [error, setError] = useState("");
   const [splitting, setSplitting] = useState(false);
 
-  // Hộp nhập OTP
-  const [otpOpen, setOtpOpen] = useState(false);
-  const [otpToken, setOtpToken] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpError, setOtpError] = useState("");
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
   useEffect(() => {
-    save({ roster, result, lockUntil });
-  }, [roster, result, lockUntil]);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [cooldown]);
+    save({ roster, result });
+  }, [roster, result]);
 
   const updatePlayer = (id: string, patch: Partial<Player>) => {
     const apply = (p: Player) => (p.id === id ? { ...p, ...patch } : p);
@@ -204,13 +213,19 @@ export default function TeamSplitter() {
       positions: Object.fromEntries(
         POSITIONS.map((p) => [p.key, r.positions[p.key].map(apply)]),
       ) as Roster["positions"],
-      subs: r.subs.map(apply),
+      subs: [r.subs[0].map(apply), r.subs[1].map(apply)],
     }));
     setError("");
   };
 
-  const addSub = () => setRoster((r) => ({ ...r, subs: [...r.subs, newPlayer()] }));
-  const removeSub = (id: string) => setRoster((r) => ({ ...r, subs: r.subs.filter((s) => s.id !== id) }));
+  const addSub = (team: 0 | 1) =>
+    setRoster((r) => {
+      const subs: Roster["subs"] = [[...r.subs[0]], [...r.subs[1]]];
+      subs[team].push(newPlayer());
+      return { ...r, subs };
+    });
+  const removeSub = (id: string) =>
+    setRoster((r) => ({ ...r, subs: [r.subs[0].filter((s) => s.id !== id), r.subs[1].filter((s) => s.id !== id)] }));
 
   // Bỏ khoảng trắng thừa, bỏ ô dự bị để trống; báo vị trí còn thiếu người
   const cleanRoster = () => {
@@ -219,81 +234,33 @@ export default function TeamSplitter() {
       positions: Object.fromEntries(
         POSITIONS.map((p) => [p.key, roster.positions[p.key].map(trim)]),
       ) as Roster["positions"],
-      subs: roster.subs.map(trim).filter((s) => s.name),
+      subs: [roster.subs[0].map(trim).filter((s) => s.name), roster.subs[1].map(trim).filter((s) => s.name)],
     };
-    const missing = POSITIONS.filter((p) => cleaned.positions[p.key].some((pl) => !pl.name));
+    const missing = POSITIONS.flatMap((p) =>
+      TEAMS.flatMap((t, i) => (cleaned.positions[p.key][i].name ? [] : [`${p.label} (${t.name})`])),
+    );
     if (missing.length) {
-      setError(`Còn thiếu người ở: ${missing.map((p) => p.label).join(", ")}`);
+      setError(`Còn thiếu người ở: ${missing.join(", ")}`);
       return null;
     }
     return cleaned;
   };
 
-  const doSplit = async (otp?: { otp: string; otpToken: string }) => {
+  const handleSplit = async () => {
     const cleaned = cleanRoster();
-    if (!cleaned) return false;
+    if (!cleaned) return;
     setSplitting(true);
     setError("");
     try {
-      const data = await postJson<{ teams: [Team, Team] }>("/api/split", {
-        roster: cleaned,
-        resplit: Boolean(otp),
-        ...otp,
-      });
+      const data = await postJson<{ teams: [Team, Team] }>("/api/split", { roster: cleaned });
       setRoster(cleaned);
       setResult({ roster: cleaned, teams: data.teams, at: Date.now() });
       setShowResult(true);
-      setLockUntil(Date.now() + LOCK_MS);
       window.scrollTo({ top: 0, behavior: "smooth" });
-      return true;
     } catch (e) {
-      const msg = (e as Error).message;
-      if (otp) setOtpError(msg);
-      else setError(msg);
-      return false;
+      setError((e as Error).message);
     } finally {
       setSplitting(false);
-    }
-  };
-
-  // Đã chia đội gần đây thì phải có OTP mới được chia tiếp
-  const handleSplit = () => {
-    if (!cleanRoster()) return;
-    if (Date.now() < lockUntil) {
-      setOtpCode("");
-      setOtpError("");
-      setOtpOpen(true);
-      return;
-    }
-    doSplit();
-  };
-
-  const requestOtp = async () => {
-    setOtpError("");
-    setSendingOtp(true);
-    try {
-      const data = await postJson<{ token: string }>("/api/otp");
-      setOtpToken(data.token);
-      setCooldown(OTP_COOLDOWN_S);
-    } catch (e) {
-      setOtpError((e as Error).message);
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-  const confirmOtp = async () => {
-    if (!/^\d{6}$/.test(otpCode)) {
-      setOtpError("Mã OTP gồm 6 chữ số.");
-      return;
-    }
-    if (!otpToken) {
-      setOtpError(sendingOtp ? "Đang gửi mã, đợi vài giây rồi bấm lại." : "Bấm “Gửi mã OTP” trước.");
-      return;
-    }
-    if (await doSplit({ otp: otpCode, otpToken })) {
-      setOtpOpen(false);
-      setOtpToken("");
     }
   };
 
@@ -320,65 +287,6 @@ export default function TeamSplitter() {
     </div>
   );
 
-  // Ô nhập mã luôn hiện sẵn, để mã về email trước khi server phản hồi vẫn nhập được
-  const otpDialog = otpOpen && (
-    <div className="anim-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="anim-modal w-full max-w-sm rounded-2xl bg-gradient-to-b from-[#1d3f2a] to-[#132b1c] p-5 shadow-2xl ring-1 ring-white/15">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400/15 text-2xl ring-1 ring-yellow-400/40">
-          🔐
-        </div>
-        <h2 className="mb-1 text-lg font-extrabold text-yellow-400">Nhập mã OTP để chia lại</h2>
-        <p className="mb-4 text-sm text-white/70">
-          Đội đã được chia. Muốn chia lại cần mã OTP gửi tới email quản lý.
-        </p>
-        <button
-          onClick={requestOtp}
-          disabled={sendingOtp || cooldown > 0}
-          className="btn btn-secondary mb-3 flex w-full items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {sendingOtp ? (
-            <>
-              <span className="anim-spin inline-block h-4 w-4 rounded-full border-2 border-white/30 border-t-white" />
-              Đang gửi mã...
-            </>
-          ) : cooldown > 0 ? (
-            `✓ Đã gửi · gửi lại sau ${cooldown}s`
-          ) : otpToken ? (
-            "📧 Gửi lại mã OTP"
-          ) : (
-            "📧 Gửi mã OTP"
-          )}
-        </button>
-        <input
-          value={otpCode}
-          onChange={(e) => {
-            setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-            setOtpError("");
-          }}
-          onKeyDown={(e) => e.key === "Enter" && confirmOtp()}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          placeholder="Mã 6 số"
-          aria-label="Mã OTP"
-          className="mb-3 w-full rounded-xl bg-white/90 px-3 py-3 text-center text-2xl font-bold tracking-[0.4em] text-zinc-900 outline-none transition focus:bg-white focus:ring-4 focus:ring-yellow-400/60"
-        />
-        {otpError && <p className="anim-fade-up mb-3 text-center text-sm text-red-300">{otpError}</p>}
-        <div className="flex gap-2">
-          <button onClick={() => setOtpOpen(false)} className="btn btn-secondary flex-1">
-            Hủy
-          </button>
-          <button
-            onClick={confirmOtp}
-            disabled={splitting || otpCode.length !== 6}
-            className="btn btn-primary flex-1 disabled:opacity-50"
-          >
-            Xác nhận
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
   if (resolved && showResult) {
     return (
       <div className="flex flex-col items-center gap-6">
@@ -392,20 +300,30 @@ export default function TeamSplitter() {
         </div>
         <div className="sticky bottom-0 z-10 w-full bg-gradient-to-t from-[var(--background)] via-[var(--background)]/90 to-transparent pb-3 pt-6">
           <div className="mx-auto flex max-w-md gap-2">
-            <button onClick={handleSplit} disabled={splitting} className="btn btn-primary flex-1 disabled:opacity-50">
-              🎲 Chia lại
-            </button>
-            <button onClick={() => setShowResult(false)} className="btn btn-secondary flex-1">
-              ✏️ Sửa tên
+            <button onClick={() => setShowResult(false)} className="btn btn-primary flex-1">
+              ✏️ Sửa đội hình / Chia lại
             </button>
           </div>
         </div>
         {error && <p className="anim-fade-up text-sm text-red-300">{error}</p>}
-        {otpDialog}
         {splittingOverlay}
       </div>
     );
   }
+
+  const header = (
+    <div className="grid grid-cols-2 gap-2 px-3">
+      {TEAMS.map((t) => (
+        <div
+          key={t.name}
+          className="flex items-center justify-center gap-2 rounded-xl bg-white/[0.06] py-2 text-sm font-extrabold uppercase tracking-wide ring-1 ring-white/10"
+        >
+          <KitDot kit={t.kit} />
+          {t.name}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="mx-auto w-full max-w-xl">
@@ -415,9 +333,12 @@ export default function TeamSplitter() {
         </button>
       )}
       <p className="anim-fade-up mb-4 text-center text-sm text-white/70">
-        Nhập 2 người đá cùng một vị trí, bấm 📷 để thêm ảnh. Bấm <b>Chia đội</b>, mỗi vị trí sẽ chia
-        ngẫu nhiên 1 người sang mỗi đội, dự bị chia đều hai bên.
+        Cột <b>trái</b> là đội <b>{TEAMS[0].name}</b>, cột <b>phải</b> là đội <b>{TEAMS[1].name}</b>. Bấm 📷 để
+        thêm ảnh, nhập xong bấm <b>Chia đội</b>.
       </p>
+      <div className="anim-fade-up sticky top-0 z-20 -mx-1 mb-3 bg-[var(--background)]/85 px-1 py-2 backdrop-blur">
+        {header}
+      </div>
       <ul className="flex flex-col gap-3">
         {POSITIONS.map((p, i) => (
           <li key={p.key} className="card anim-fade-up" style={{ animationDelay: `${0.05 + i * 0.05}s` }}>
@@ -432,8 +353,9 @@ export default function TeamSplitter() {
                 <PlayerInput
                   key={pl.id}
                   player={pl}
-                  placeholder={`Người ${idx + 1}`}
-                  label={`${p.label} - người ${idx + 1}`}
+                  kit={TEAMS[idx].kit}
+                  placeholder={`Tên ${TEAMS[idx].name.replace("Áo ", "")}`}
+                  label={`${p.label} - ${TEAMS[idx].name}`}
                   onChange={(patch) => updatePlayer(pl.id, patch)}
                   onError={setError}
                 />
@@ -441,38 +363,46 @@ export default function TeamSplitter() {
             </div>
           </li>
         ))}
-        <li className="card anim-fade-up" style={{ animationDelay: `${0.05 + POSITIONS.length * 0.05}s` }}>
-          <div className="mb-2 flex items-baseline gap-2">
-            <span className="rounded-md bg-gradient-to-b from-[#8a1538] to-[#5a0f29] px-2 py-0.5 text-sm font-extrabold shadow">
-              DB
-            </span>
-            <span className="text-sm text-white/70">
-              Dự bị ({roster.subs.length}/{MAX_SUBS})
-            </span>
-          </div>
-          <div className="flex flex-col gap-2">
-            {roster.subs.map((s, idx) => (
-              <div key={s.id} className="anim-fade-up">
-                <PlayerInput
-                  player={s}
-                  placeholder={`Dự bị ${idx + 1}`}
-                  label={`Dự bị ${idx + 1}`}
-                  onChange={(patch) => updatePlayer(s.id, patch)}
-                  onError={setError}
-                  onRemove={() => removeSub(s.id)}
-                />
-              </div>
-            ))}
-            {roster.subs.length < MAX_SUBS && (
-              <button
-                onClick={addSub}
-                className="btn w-full border border-dashed border-white/25 py-2.5 text-sm text-white/80 hover:border-yellow-400/60 hover:text-yellow-300"
-              >
-                ＋ Thêm dự bị
-              </button>
-            )}
-          </div>
-        </li>
+        {TEAMS.map((t, team) => (
+          <li
+            key={t.name}
+            className="card anim-fade-up"
+            style={{ animationDelay: `${0.05 + (POSITIONS.length + team) * 0.05}s` }}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <span className="rounded-md bg-gradient-to-b from-[#8a1538] to-[#5a0f29] px-2 py-0.5 text-sm font-extrabold shadow">
+                DB
+              </span>
+              <KitDot kit={t.kit} />
+              <span className="text-sm text-white/70">
+                Dự bị {t.name} ({roster.subs[team].length}/{MAX_SUBS})
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {roster.subs[team].map((s, idx) => (
+                <div key={s.id} className="anim-fade-up">
+                  <PlayerInput
+                    player={s}
+                    kit={t.kit}
+                    placeholder={`Dự bị ${idx + 1}`}
+                    label={`Dự bị ${idx + 1} - ${t.name}`}
+                    onChange={(patch) => updatePlayer(s.id, patch)}
+                    onError={setError}
+                    onRemove={() => removeSub(s.id)}
+                  />
+                </div>
+              ))}
+              {roster.subs[team].length < MAX_SUBS && (
+                <button
+                  onClick={() => addSub(team as 0 | 1)}
+                  className="btn w-full border border-dashed border-white/25 py-2.5 text-sm text-white/80 hover:border-yellow-400/60 hover:text-yellow-300"
+                >
+                  ＋ Thêm dự bị {t.name}
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
       </ul>
       {error && <p className="anim-fade-up mt-3 text-center text-sm text-red-300">{error}</p>}
       <div className="sticky bottom-0 z-10 mt-4 flex gap-2 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/90 to-transparent pb-3 pt-6">
@@ -483,7 +413,6 @@ export default function TeamSplitter() {
           ⚽ Chia đội
         </button>
       </div>
-      {otpDialog}
       {splittingOverlay}
     </div>
   );
