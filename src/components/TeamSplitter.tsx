@@ -332,10 +332,6 @@ export default function TeamSplitter() {
           ← Xem lại đội hình vừa chia
         </button>
       )}
-      <p className="anim-fade-up mb-4 text-center text-sm text-white/70">
-        Cột <b>trái</b> là đội <b>{TEAMS[0].name}</b>, cột <b>phải</b> là đội <b>{TEAMS[1].name}</b>. Bấm 📷 để
-        thêm ảnh, nhập xong bấm <b>Chia đội</b>.
-      </p>
       <div className="anim-fade-up sticky top-0 z-20 -mx-1 mb-3 bg-[var(--background)]/85 px-1 py-2 backdrop-blur">
         {header}
       </div>
