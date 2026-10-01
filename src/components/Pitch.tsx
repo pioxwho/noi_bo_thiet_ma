@@ -12,6 +12,7 @@ type Props = {
   name: string;
   team: ResolvedTeam;
   kit: Kit;
+  index: number; // 0 = đội bên trái, 1 = đội bên phải (dùng cho hiệu ứng)
 };
 
 function Shirt({ kit, label }: { kit: Kit; label: string }) {
@@ -94,9 +95,14 @@ function PlayerBadge({ player, kit, label, size }: { player: Player; kit: Kit; l
   );
 }
 
-export default function Pitch({ name, team, kit }: Props) {
+export default function Pitch({ name, team, kit, index }: Props) {
+  // Cầu thủ lần lượt xuất hiện từ thủ môn lên, đội thứ hai chậm hơn một nhịp
+  const delay = (i: number) => ({ animationDelay: `${0.35 + index * 0.15 + i * 0.09}s` });
   return (
-    <section className="w-full max-w-md">
+    <section
+      className={`w-full max-w-md ${index === 0 ? "anim-slide-left" : "anim-slide-right"}`}
+      style={{ animationDelay: `${index * 0.12}s` }}
+    >
       <h2 className="mb-2 flex items-center justify-center gap-2 text-lg font-extrabold uppercase tracking-wide">
         <span
           className="inline-block h-4 w-4 rounded-full border-2"
@@ -105,40 +111,48 @@ export default function Pitch({ name, team, kit }: Props) {
         {name}
       </h2>
       <div
-        className="relative aspect-[2/3] w-full overflow-hidden rounded-xl shadow-xl ring-1 ring-black/20"
+        className="relative aspect-[2/3] w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/40 ring-1 ring-white/10"
         style={{
           background:
             "repeating-linear-gradient(180deg, #2f8f3e 0 10%, #2a8238 10% 20%)",
         }}
       >
         <PitchLines />
-        {POSITIONS.map((p) => {
+        {/* Ánh đèn sân */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,255,255,0.18),transparent_60%)]" />
+        {POSITIONS.map((p, i) => {
           const player = team.lineup[p.key];
           return (
             <div
               key={p.key}
-              className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+              className="absolute -translate-x-1/2 -translate-y-1/2"
               style={{ left: `${p.x}%`, top: `${p.y}%` }}
             >
-              <PlayerBadge player={player} kit={kit} label={p.key} size="lg" />
-              <span
-                className="mt-0.5 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
-                title={player.name}
-              >
-                {player.name}
-              </span>
+              <div className="anim-pop-in flex flex-col items-center transition-transform duration-200 hover:scale-110" style={delay(i)}>
+                <PlayerBadge player={player} kit={kit} label={p.key} size="lg" />
+                <span
+                  className="mt-0.5 max-w-[6.5rem] truncate rounded-sm bg-[#6b1230] px-2 py-0.5 text-center text-[11px] font-bold uppercase text-white shadow sm:max-w-[8rem] sm:text-sm"
+                  title={player.name}
+                >
+                  {player.name}
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
       {team.subs.length > 0 && (
-        <div className="mt-3 rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+        <div className="card mt-3">
           <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-yellow-400">
             Dự bị ({team.subs.length})
           </h3>
           <ul className="grid grid-cols-3 gap-2">
-            {team.subs.map((s) => (
-              <li key={s.id} className="flex min-w-0 flex-col items-center gap-1">
+            {team.subs.map((s, i) => (
+              <li
+                key={s.id}
+                className="anim-pop-in flex min-w-0 flex-col items-center gap-1"
+                style={delay(POSITIONS.length + i)}
+              >
                 <PlayerBadge player={s} kit={kit} size="sm" />
                 <span className="max-w-full truncate text-xs font-bold uppercase" title={s.name}>
                   {s.name}

@@ -4,6 +4,17 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { POSITIONS, type Player } from "@/lib/formation";
 import {
+  BALL,
+  BALL_PATCH,
+  LOGO_COLORS,
+  LOGO_VIEWBOX,
+  SHIELD_BAND,
+  SHIELD_INNER,
+  SHIELD_OUTER,
+  STAR,
+  STARS,
+} from "@/lib/logo";
+import {
   SHIRT_BODY_PATH,
   SHIRT_COLLAR_PATH,
   SHIRT_PATH,
@@ -26,6 +37,54 @@ const fonts = Promise.all([
   readFile(join(process.cwd(), "assets/BeVietnamPro-Bold.ttf")),
   readFile(join(process.cwd(), "assets/BeVietnamPro-ExtraBold.ttf")),
 ]);
+
+// Huy hiệu PIO cho ảnh email (Satori không vẽ chữ trong SVG nên chữ đặt bằng div)
+function EmailLogo() {
+  const C = LOGO_COLORS;
+  const W = 84;
+  const H = 94;
+  return (
+    <div style={{ position: "absolute", top: 18, left: 40, width: W, height: H, display: "flex" }}>
+      <svg width={W} height={H} viewBox={LOGO_VIEWBOX} style={{ position: "absolute", top: 0, left: 0 }}>
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor={C.goldLight} />
+            <stop offset="0.5" stopColor={C.gold} />
+            <stop offset="1" stopColor={C.goldDark} />
+          </linearGradient>
+          <linearGradient id="m" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={C.maroonTop} />
+            <stop offset="1" stopColor={C.maroonBottom} />
+          </linearGradient>
+        </defs>
+        <path d={SHIELD_OUTER} fill="url(#g)" />
+        <path d={SHIELD_INNER} fill="url(#m)" />
+        <path d={SHIELD_BAND} fill="url(#g)" />
+        {STARS.map((st) => (
+          <path key={st.x} d={STAR} transform={`translate(${st.x} ${st.y}) scale(${st.s})`} fill={C.maroonBottom} />
+        ))}
+        <circle cx={BALL.cx} cy={BALL.cy} r={BALL.r} fill="#fff" stroke={C.maroonBottom} strokeWidth="1" />
+        <path d={BALL_PATCH} fill={C.maroonBottom} />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          top: H * 0.38,
+          left: 0,
+          width: W,
+          display: "flex",
+          justifyContent: "center",
+          fontSize: 25,
+          fontWeight: 800,
+          fontStyle: "italic",
+          color: C.goldLight,
+        }}
+      >
+        PIO
+      </div>
+    </div>
+  );
+}
 
 function Shirt({ kit, label }: { kit: Kit; label: string }) {
   return (
@@ -222,26 +281,7 @@ export async function renderLineupPng(teams: ResolvedTeam[], subtitle: string) {
           position: "relative",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: 22,
-            left: 40,
-            width: 76,
-            height: 76,
-            borderRadius: 38,
-            border: "5px solid #facc15",
-            background: "#6b1230",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 24,
-            fontWeight: 800,
-            color: "white",
-          }}
-        >
-          PIO
-        </div>
+        <EmailLogo />
         <div style={{ display: "flex", flexShrink: 0, fontSize: 48, fontWeight: 800, color: "#facc15" }}>FC THIẾT MÃ</div>
         <div style={{ display: "flex", flexShrink: 0, fontSize: 20, color: "rgba(255,255,255,.6)", marginBottom: 18 }}>
           {subtitle}

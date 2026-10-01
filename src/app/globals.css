@@ -13,19 +13,190 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(250, 204, 21, 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(155, 27, 69, 0.18), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
 @layer components {
   .btn {
-    @apply cursor-pointer whitespace-nowrap rounded-xl px-3 py-3 font-bold sm:px-4 transition active:scale-95;
+    @apply relative cursor-pointer overflow-hidden whitespace-nowrap rounded-xl px-3 py-3 font-bold transition duration-200 sm:px-4;
+    @apply hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply bg-yellow-400 text-zinc-900 hover:bg-yellow-300;
+    @apply bg-gradient-to-b from-yellow-300 to-yellow-500 text-zinc-900 shadow-lg shadow-yellow-500/25 hover:shadow-yellow-400/40;
+  }
+  /* Vệt sáng lướt qua nút chính */
+  .btn-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    animation: shine 3.2s ease-in-out infinite;
   }
   .btn-secondary {
-    @apply bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20;
+    @apply bg-white/10 text-white ring-1 ring-white/20 backdrop-blur hover:bg-white/20;
+  }
+  .card {
+    @apply rounded-2xl bg-white/[0.06] p-3 ring-1 ring-white/10 backdrop-blur-sm transition duration-300 hover:bg-white/[0.09] hover:ring-yellow-400/30;
+  }
+  .title-gold {
+    background: linear-gradient(100deg, #fde68a 0%, #facc15 30%, #fff7cc 50%, #facc15 70%, #f59e0b 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: title-shimmer 5s linear infinite;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(24px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-48px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(48px) rotate(2deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+}
+@keyframes shine {
+  0%,
+  60% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes title-shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+@keyframes ball-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.7, 0.4);
+  }
+  50% {
+    transform: translateY(-46px) rotate(180deg);
+    animation-timing-function: cubic-bezier(0.3, 0.6, 0.7, 1);
+  }
+}
+@keyframes shadow-pulse {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleX(0.5);
+    opacity: 0.15;
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(16px);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.anim-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.anim-pop-in {
+  animation: pop-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.anim-slide-left {
+  animation: slide-left 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.anim-slide-right {
+  animation: slide-right 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.anim-float {
+  animation: float 4s ease-in-out infinite;
+}
+.anim-ball {
+  animation: ball-bounce 0.9s infinite;
+}
+.anim-shadow {
+  animation: shadow-pulse 0.9s infinite;
+}
+.anim-backdrop {
+  animation: backdrop-in 0.2s ease-out both;
+}
+.anim-modal {
+  animation: modal-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.anim-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
